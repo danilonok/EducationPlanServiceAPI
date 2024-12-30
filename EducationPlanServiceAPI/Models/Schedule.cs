@@ -9,6 +9,8 @@
         public DateTime StartDate { get; set; }
         public DateTime EndDate { get; set; }
         public int UserID { get; set; }
-        public ICollection<Session> Sessions { get; set; }
+        public ICollection<Event> Sessions { get; set; } = new List<Event>();
+
+        public ICollection<EducationTask> Tasks { get; set; } = new List<EducationTask>();
     }
 }

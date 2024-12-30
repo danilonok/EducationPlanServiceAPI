@@ -1,12 +1,23 @@
-﻿using AuthServiceAPI.Data;
+﻿using EducationPlanServiceAPI.Data;
+using EducationPlanServiceAPI.Helpers;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using System.Text.Json.Serialization;
 using System.Text.Json;
+using MassTransit;
+using EducationPlanServiceAPI.RabbitMQ;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddSingleton(_ =>
+    new RabbitMqConnection(
+        hostName: "rabbitmq-service",
+        userName: "guest",
+        password: "guest"));
+
+builder.Services.AddSingleton<RabbitMqProducer>();
 
 // Add services to the container.
 
@@ -32,14 +43,14 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowFrontend",
-        policy =>
-        {
-            policy.WithOrigins("http://localhost:3000") // Укажите адрес фронтенда
-                  .AllowAnyHeader()
-                  .AllowAnyMethod();
-        });
+    options.AddPolicy("AllowAll", builder =>
+    {
+        builder.AllowAnyOrigin()
+               .AllowAnyMethod()
+               .AllowAnyHeader();
+    });
 });
+
 
 builder.Services.AddControllers()
         .AddJsonOptions(options =>
@@ -64,12 +75,19 @@ if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
+    app.ApplyMigrations();
 }
-
+app.Use(async (context, next) =>
+{
+    var token = context.Request.Headers["Authorization"];
+    Console.WriteLine($"Authorization Header: {token}");
+    await next();
+});
+app.UseCors("AllowAll");
 app.UseHttpsRedirection();
 
+app.UseAuthentication();
 app.UseAuthorization();
-
 app.MapControllers();
 
 app.Run();

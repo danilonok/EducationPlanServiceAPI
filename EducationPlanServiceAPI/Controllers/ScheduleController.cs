@@ -1,4 +1,4 @@
-﻿using AuthServiceAPI.Data;
+﻿using EducationPlanServiceAPI.Data;
 using EducationPlanServiceAPI.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -21,17 +21,47 @@ namespace EducationPlanServiceAPI.Controllers
             _logger = logger;
         }
 
-        [HttpPost("schedule")]
+        [HttpPost]
         [Authorize]
         public async Task<ActionResult> CreateSchedule([FromBody] ScheduleCreationModel scheduleCreationModel)
         {
             if (scheduleCreationModel != null)
             {
-                _context.Schedules.Add(new Schedule { CreatedDate = DateTime.UtcNow, Title = scheduleCreationModel.Title, Description = scheduleCreationModel.Description, StartDate = scheduleCreationModel.StartDate, EndDate = scheduleCreationModel.EndDate, UserID = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value) });
+                var schedule = new Schedule
+                {
+                    CreatedDate = DateTime.UtcNow,
+                    Title = scheduleCreationModel.Title,
+                    Description = scheduleCreationModel.Description,
+                    StartDate = DateTime.SpecifyKind(scheduleCreationModel.StartDate, DateTimeKind.Utc),
+
+                   
+                    EndDate = DateTime.SpecifyKind(scheduleCreationModel.EndDate, DateTimeKind.Utc),
+                    UserID = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value)
+                };
+                _context.Schedules.Add(schedule);
                 await _context.SaveChangesAsync();
-                return Ok("Schedule was created succesfully.");
+                return Ok(new { id = schedule.Id, message = "Schedule was created succesfully." });
             }
             return BadRequest("Schedule parameters are invalid.");
+        }
+
+
+        [HttpGet()]
+        [Authorize]
+        public async Task<ActionResult> GetAllSchedules()
+        {
+
+            if (!int.TryParse(User.FindFirst(ClaimTypes.NameIdentifier).Value, out int userId))
+            {
+                return Unauthorized("User authentication failed.");
+            }
+
+            List<Schedule> schedules = await _context.Schedules.Where(e => e.UserID == userId).ToListAsync();
+            if (schedules == null)
+            {
+                return NotFound("Event not found or you don't have permission to access this event.");
+            }
+            return Ok(schedules);
         }
 
         [HttpGet("{id:int}")]
@@ -83,6 +113,30 @@ namespace EducationPlanServiceAPI.Controllers
             {
                 _logger.LogError(ex, "Error updating event");
                 return StatusCode(500, "An error occurred while updating the schedule.");
+            }
+        }
+
+        [HttpDelete("{id:int}")]
+        [Authorize]
+        public async Task<ActionResult> DeleteSchedule(int id)
+        {
+            if (!int.TryParse(User.FindFirst(ClaimTypes.NameIdentifier).Value, out int userId))
+            {
+                return Unauthorized("User authentication failed.");
+            }
+
+            Schedule schedule = await _context.Schedules.FirstOrDefaultAsync(u => u.Id == id && u.UserID == userId);
+
+            try
+            {
+                _context.Schedules.Remove(schedule);
+                await _context.SaveChangesAsync();
+                return Ok("Schedule deleted successfully.");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error deleting schedule");
+                return StatusCode(500, "An error occurred while deleting the schedule.");
             }
         }
 
